@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #!/usr/bin/python2
-#Version 2.4
+#Version 0.2.4
 #Made by: Brandon Kimball
 
 
@@ -137,9 +137,11 @@ class KIDE(Gtk.Application):
         self.monitor.connect("changed", self.auto_dir_update)
 
     def reset_buffer_and_view(self, buffer_cont):
+        self.coding_buffer.begin_not_undoable_action()
         self.coding_buffer = GtkSource.Buffer()
         self.coding_pane.set_buffer(self.coding_buffer)
         self.coding_buffer.set_text(buffer_cont)
+        self.coding_buffer.end_not_undoable_action()
 
     def intercept_delete(self, widget, event):
         if self.save_buffer != self.get_coding_content()[:]:
@@ -166,6 +168,10 @@ class KIDE(Gtk.Application):
         lang = lang_manager.get_language("{}".format(self.syntax))
         self.coding_buffer.set_language(lang)
         self.coding_buffer.set_style_scheme(GtkSource.StyleSchemeManager().get_default().get_default().get_scheme("{}".format(self.scheme)))
+        if self.word_wrap == "True":
+            self.coding_pane.set_wrap_mode(Gtk.WrapMode.WORD)
+        else:
+            self.coding_pane.set_wrap_mode(Gtk.WrapMode.NONE)
 
     def get_coding_content(self):
         gc.collect()
@@ -213,7 +219,6 @@ class KIDE(Gtk.Application):
             try:
                 with open(self.previous_file, "wb") as file:
                     self.coding_buffer.begin_not_undoable_action()  
-                    
                     file.write(coding_text)
                     self.coding_buffer.end_not_undoable_action()
                 self.current_file = model[tree_iter][0]
