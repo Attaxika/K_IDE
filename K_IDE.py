@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #!/usr/bin/python2
-#Version 0.2.4
+#Version 0.2.6
 #Made by: Brandon Kimball
 
 
@@ -11,7 +11,7 @@ from subprocess import Popen,PIPE
 gi.require_version("Gtk", "3.0")
 gi.require_version("GtkSource", "3.0")
 gi.require_version("Gio", "2.0")
-from gi.repository import GLib, Gtk, Gdk, GtkSource, Gio
+from gi.repository import GLib, Gtk, Gdk, GtkSource, Gio, Pango
 
 #Application
 class KIDE(Gtk.Application):
@@ -72,12 +72,15 @@ class KIDE(Gtk.Application):
         self.prefs_button = Gtk.Button(label="Prefs")
         refresh_button = Gtk.Button(label="Refresh")
         auto_save_button = Gtk.CheckButton(label="Auto-Save")
-
+        find_label = Gtk.Label("Find:")
+        find_entry = Gtk.Entry()
         action_bar.add(run_button)
         action_bar.add(file_button)
         action_bar.add(self.prefs_button)
         action_bar.add(refresh_button)
         action_bar.add(auto_save_button)
+        action_bar.add(find_label)
+        action_bar.add(find_entry)
 
         grid.attach(action_bar,0,0,1,1)
         grid.add(action_bar)
@@ -105,6 +108,10 @@ class KIDE(Gtk.Application):
         self.file_view.append_column(self.file_column)
         self.populate_file_list(self.file_view)
         tree_selection = self.file_view.get_selection()
+        working_window.pack1(self.file_view, True, True)
+        self.file_renderer.set_property("ellipsize", Pango.EllipsizeMode.END)
+        working_window.pack2(coding_window, True, True)
+        working_window.set_position(200)
         grid.attach(working_window,0,1,1,1)
         grid.add(working_window)
         working_window.add(coding_window)
@@ -119,6 +126,7 @@ class KIDE(Gtk.Application):
         tree_selection.connect("changed", self.file_viewer_open)
         new_item.connect("activate", self.gen_new, tree_selection)
         self.coding_buffer.connect("changed", self.auto_saving)
+        find_entry.connect("activate", self.search)
         window.connect("key-release-event", self.key_handler)
 
         self.add_monitor()
@@ -137,11 +145,30 @@ class KIDE(Gtk.Application):
         self.monitor.connect("changed", self.auto_dir_update)
 
     def reset_buffer_and_view(self, buffer_cont):
-        self.coding_buffer.begin_not_undoable_action()
+        pointer_position = ""
+        new_iter = ""
+        try:
+            pointer_position = self.coding_buffer.get_iter_at_mark(self.coding_buffer.get_insert()).get_offset()
+            new_iter = self.coding_buffer.get_iter_at_offset(pointer_position)
+        except Exception as e:
+            pass
+
+        temp_buffer = GtkSource.Buffer()
+        self.coding_pane.set_buffer(temp_buffer)
+        self.coding_buffer = None
         self.coding_buffer = GtkSource.Buffer()
         self.coding_pane.set_buffer(self.coding_buffer)
+        self.coding_buffer.begin_not_undoable_action()
+        self.coding_buffer.set_text("")
         self.coding_buffer.set_text(buffer_cont)
         self.coding_buffer.end_not_undoable_action()
+
+        try:
+            new_iter = self.coding_buffer.get_iter_at_offset(pointer_position)
+            self.coding_buffer.place_cursor(new_iter)
+        except Exception as e:
+                print(e)
+                pass
 
     def intercept_delete(self, widget, event):
         if self.save_buffer != self.get_coding_content()[:]:
@@ -177,7 +204,6 @@ class KIDE(Gtk.Application):
         gc.collect()
         start_iter, end_iter = self.coding_buffer.get_bounds()
         cont = self.coding_buffer.get_text(start_iter, end_iter, False)
-        self.reset_buffer_and_view(cont)
         self.gen_prefs()
         return cont
 
@@ -197,7 +223,7 @@ class KIDE(Gtk.Application):
     def update_save_buffer(self, update_previous):
         if update_previous:
             self.previous_file = self.current_file[:]
-            if self.previous_file is not "":
+            if self.previous_file != "":
                 try:
                     with open(self.previous_file, "r") as file:
                         self.save_buffer = file.read()
@@ -404,35 +430,28 @@ class KIDE(Gtk.Application):
             with open(self.current_file, "wb") as file:
                 file.write(content[:])
 
-    def search(self, entry, event):
-        if event.keyval == Gdk.KEY_Return:
-            search_text = entry.get_text()
+    def search(self, entry):
+        search_text = entry.get_text()
+        
+        if hasattr(self, 'last_match_end'):
+            start_iter = self.last_match_end
+        else:
             start_iter = self.coding_buffer.get_start_iter()
-            match = start_iter.forward_search(search_text, Gtk.TextSearchFlags.TEXT_ONLY, None)
-            if match:
-                match_start, match_end = match
-                self.coding_buffer.select_range(match_start, match_end)
-                self.coding_pane.scroll_to_iter(match_start, 0.0, False, 0.0, 0.0)
+
+        match = start_iter.forward(search_text, Gtk.TextSearchFlags.TEXT_ONLY, None)
+        if match:
+            match_start, match_end = match
+            self.coding_buffer.select_range(match_start, match_end)
+            self.coding_pane.scroll_to_iter(match_start, 0.0, False, 0.0, 0.0)
+            self.last_match_end = match_end
+        else:
+            self.last_match_end = None
 
     def key_handler(self, widget, event):
         keyname = Gdk.keyval_name(event.keyval)
         if keyname == "s" and (event.state & Gdk.ModifierType.CONTROL_MASK):
             content = self.get_coding_content()[:]
             self.save_changes(widget,False,False)
-        if keyname == "f" and (event.state & Gdk.ModifierType.CONTROL_MASK):
-            find_window = Gtk.ApplicationWindow(application=self, title="Find", resizable=False)
-            find_window.set_size_request(150,100)
-            find_grid = Gtk.Grid()
-            find_window.add(find_grid)
-            search_entry = Gtk.Entry()
-            search_entry.set_placeholder_text("Search...")
-            search_entry.set_no_show_all(True)
-            find_grid.attach(search_entry,0,0,1,1)
-            find_grid.add(search_entry)
-            find_window.show_all()
-            search_entry.show()
-            find_window.present()
-            search_entry.connect("key-release-event", self.search)
         return True
 
     def run_program(self, process):
