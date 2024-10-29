@@ -16,6 +16,7 @@ from gi.repository import GLib, Gtk, Gdk, GtkSource, Gio, Pango
 #Application
 class KIDE(Gtk.Application):
     #Globals
+    auto_detect = False
     process = Popen(["echo", "", ""])
     prefs_content = ""
     word_wrap = True
@@ -28,7 +29,8 @@ class KIDE(Gtk.Application):
         "lang" : "python",
         "compiler" : "python",
         "scheme" : "classic",
-        "valid_schemes" : "classic, cobalt, kate, oblivion, solarized-dark, solarized,light, tango"
+        "valid_schemes" : "classic, cobalt, kate, oblivion, solarized-dark, solarized,light, tango",
+        "auto_detect" : "False"
     }
     current_file = ""
     previous_file = ""
@@ -81,9 +83,7 @@ class KIDE(Gtk.Application):
         action_bar.add(auto_save_button)
         action_bar.add(find_label)
         action_bar.add(find_entry)
-
         grid.attach(action_bar,0,0,1,1)
-        grid.add(action_bar)
 
         #Coding text
         coding_window = Gtk.ScrolledWindow()
@@ -157,7 +157,8 @@ class KIDE(Gtk.Application):
         self.coding_pane.set_buffer(temp_buffer)
         self.coding_buffer = None
         self.coding_buffer = GtkSource.Buffer()
-        self.coding_pane.set_buffer(self.coding_buffer)
+        GLib.idle_add(self.coding_pane.set_buffer, self.coding_buffer)
+        temp_buffer = None
         self.coding_buffer.begin_not_undoable_action()
         self.coding_buffer.set_text("")
         self.coding_buffer.set_text(buffer_cont)
@@ -166,9 +167,11 @@ class KIDE(Gtk.Application):
         try:
             new_iter = self.coding_buffer.get_iter_at_offset(pointer_position)
             self.coding_buffer.place_cursor(new_iter)
+            cursor_pos = self.coding_buffer.get_insert()
+            GLib.idle_add(self.coding_pane.scroll_to_mark, cursor_pos, 0.1, True, 0.0, 0.5)
         except Exception as e:
-                print(e)
-                pass
+            print(e)
+            pass
 
     def intercept_delete(self, widget, event):
         if self.save_buffer != self.get_coding_content()[:]:
@@ -199,6 +202,37 @@ class KIDE(Gtk.Application):
             self.coding_pane.set_wrap_mode(Gtk.WrapMode.WORD)
         else:
             self.coding_pane.set_wrap_mode(Gtk.WrapMode.NONE)
+        if self.auto_detect == "True":
+            if ".py" in self.current_file:
+                self.syntax = "python"
+                self.compiler = "python"
+            elif ".html" in self.current_file:
+                self.syntax = "html"
+                self.compiler = "gio open"
+            elif ".css" in self.current_file:
+                self.syntax = "css"
+                self.compiler = "echo 'Open your associated HTML file'"
+            elif ".cs" in self.current_file:
+                self.syntax = "csharp"
+                self.compiler = "gcc"
+            elif ".cpp" in self.current_file:
+                self.syntax = "cpp"
+                self.compiler = "gcc"
+            elif ".java" in self.current_file:
+                self.syntax = "java"
+                self.compiler = "java"
+            elif ".sh" in self.current_file:
+                self.syntax = "bash"
+                self.compiler = "bash"
+            elif ".rs" in self.current_file:
+                self.syntax = "rust"
+                self.compiler = "echo 'No rust compiler built in :( Sorry'"
+            elif ".json" in self.current_file:
+                self.syntax = "json"
+                self.compiler = "echo 'JSON is not runnable'"
+            else:
+                self.syntax = "plaintext"
+                self.compiler = "echo 'No associated lang found'"
 
     def get_coding_content(self):
         gc.collect()
@@ -347,17 +381,18 @@ class KIDE(Gtk.Application):
             Gtk.Widget.get_toplevel(widget).destroy()
             self.process.terminate()
 
-    def change_prefs(self, widget, word_wrap_widget, compiler_widget, lang_widget, scheme_widget):
-        self.reset_buffer_and_view(self.get_coding_content()[:])
+    def change_prefs(self, widget, word_wrap_widget, compiler_widget, lang_widget, scheme_widget, auto_detect_widget):
         prefs_update = {
             "word_wrap" : "{}".format(str(word_wrap_widget.get_active())),
             "lang" : lang_widget.get_text(),
             "compiler" : compiler_widget.get_text(),
             "scheme" : scheme_widget.get_text(),
-            "valid_schemes" : "classic, cobalt, kate, oblivion, solarized-dark, solarized-light, tango"
+            "valid_schemes" : "classic, cobalt, kate, oblivion, solarized-dark, solarized-light, tango",
+            "auto_detect" : "{}".format(str(auto_detect_widget.get_active()))
         }
         with open("prefs.json", "wb") as file:
             file.write(json.dumps(prefs_update, sort_keys=True, indent=4))
+        self.reset_buffer_and_view(self.get_coding_content()[:])
         self.populate_file_list(widget)
 
     def show_prefs(self, widget):
@@ -370,6 +405,7 @@ class KIDE(Gtk.Application):
 
         #Prefs items
         word_wrap_button = Gtk.CheckButton(label="Word wrap")
+        auto_detect_button = Gtk.CheckButton(label="Auto detect lang.")
         compiler_pane = Gtk.Entry()
         compiler_label = Gtk.Label(label="Compiler")
         lang_label = Gtk.Label(label="Lang")
@@ -381,34 +417,28 @@ class KIDE(Gtk.Application):
         
         #Attach items
         prefs_grid.attach(word_wrap_button,0,0,1,1)
-        prefs_grid.add(word_wrap_button)
-        prefs_grid.attach(compiler_label,0,1,1,1)
-        prefs_grid.add(compiler_label)
-        prefs_grid.attach(compiler_pane,1,1,1,1)
-        prefs_grid.add(compiler_pane)
-        prefs_grid.attach(lang_label,0,2,1,1)
-        prefs_grid.add(lang_label)
-        prefs_grid.attach(lang_pane,1,2,1,1)
-        prefs_grid.add(lang_pane)
-        prefs_grid.attach(scheme_label,0,3,1,1)
-        prefs_grid.add(scheme_label)
-        prefs_grid.attach(scheme_pane,1,3,1,1)
-        prefs_grid.add(scheme_pane)
-        prefs_grid.attach(spacer_label,1,4,1,1)
-        prefs_grid.add(spacer_label)
-        prefs_grid.attach(save_prefs_button,1,5,1,1)
-        prefs_grid.add(save_prefs_button)
+        prefs_grid.attach(auto_detect_button,0,1,1,1)
+        prefs_grid.attach(compiler_label,0,2,1,1)
+        prefs_grid.attach(compiler_pane,1,2,1,1)
+        prefs_grid.attach(lang_label,0,3,1,1)
+        prefs_grid.attach(lang_pane,1,3,1,1)
+        prefs_grid.attach(scheme_label,0,4,1,1)
+        prefs_grid.attach(scheme_pane,1,4,1,1)
+        prefs_grid.attach(spacer_label,1,5,1,1)
+        prefs_grid.attach(save_prefs_button,1,6,1,1)
 
         with open("prefs.json", "r") as file:
             prefs_content = json.load(file)
         
         if prefs_content.get("word_wrap") == "True":
             word_wrap_button.set_active(True)
+        if prefs_content.get("auto_detect") == "True":
+            auto_detect_button.set_active(True)
         compiler_pane.set_text(prefs_content.get("compiler"))
         lang_pane.set_text(prefs_content.get("lang"))
         scheme_pane.set_text(prefs_content.get("scheme"))
         
-        save_prefs_button.connect("clicked", self.change_prefs, word_wrap_button, compiler_pane, lang_pane, scheme_pane)
+        save_prefs_button.connect("clicked", self.change_prefs, word_wrap_button, compiler_pane, lang_pane, scheme_pane, auto_detect_button)
 
         def on_delete(widget, event):
             self.prefs_button.set_sensitive(True)
@@ -432,7 +462,6 @@ class KIDE(Gtk.Application):
 
     def search(self, entry):
         search_text = entry.get_text()
-        
         if hasattr(self, 'last_match_end'):
             start_iter = self.last_match_end
         else:
@@ -445,13 +474,29 @@ class KIDE(Gtk.Application):
             self.coding_pane.scroll_to_iter(match_start, 0.0, False, 0.0, 0.0)
             self.last_match_end = match_end
         else:
-            self.last_match_end = None
+            self.last_match_end = self.coding_buffer.get_start_iter()
 
     def key_handler(self, widget, event):
         keyname = Gdk.keyval_name(event.keyval)
         if keyname == "s" and (event.state & Gdk.ModifierType.CONTROL_MASK):
-            content = self.get_coding_content()[:]
             self.save_changes(widget,False,False)
+        if keyname == "d" and (event.state & Gdk.ModifierType.CONTROL_MASK):
+            start, end = self.coding_buffer.get_bounds()
+            cursor_iter = self.coding_buffer.get_iter_at_mark(self.coding_buffer.get_insert())
+            start_iter = cursor_iter.copy()
+            if not start_iter.starts_line():
+                start_iter.set_line_offset(0)
+            else:
+                start_iter.backward_line()
+            end_iter = start_iter.copy()
+            end_iter.forward_to_line_end()
+            end_iter.forward_char()
+            try:
+                self.coding_buffer.begin_user_action()
+                self.coding_buffer.delete(start_iter, end_iter)
+                self.coding_buffer.end_user_action()
+            except:
+                pass
         return True
 
     def run_program(self, process):
