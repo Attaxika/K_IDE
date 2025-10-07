@@ -1,4 +1,4 @@
-OCT 29 2024
+OCT 7 2025
 Author: Brandon Kimball
 Description: 
 K_IDE.py is a lightweight IDE designed for Python 2.7 for UNIX-based operating systems, it utilizes the GI libraries to display the data
