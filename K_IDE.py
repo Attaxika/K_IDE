@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-#!/usr/bin/python2
-#Version 0.2.6
+#Version 0.3.0
 #Made by: Brandon Kimball
+#!/usr/bin/python
 
 
 #Imports
@@ -11,7 +11,7 @@ from subprocess import Popen,PIPE
 gi.require_version("Gtk", "3.0")
 gi.require_version("GtkSource", "3.0")
 gi.require_version("Gio", "2.0")
-from gi.repository import GLib, Gtk, Gdk, GtkSource, Gio, Pango
+from gi.repository import GLib, Gtk, GtkSource, Gdk, Gio, Pango
 
 #Application
 class KIDE(Gtk.Application):
@@ -41,13 +41,14 @@ class KIDE(Gtk.Application):
     def __init__(self):
         super(KIDE, self).__init__(application_id="com.ballin.kide")
         GLib.set_application_name("KIDE")
-        self.connect("activate", self.on_activate) 
+        self.connect("activate", self.on_activate)
 	#Gtk construction
     def on_activate(self, app):
         #Main window
         window = Gtk.ApplicationWindow(application=self, title="KIDE", resizable=True)
         window.set_size_request(750,500)
         grid = Gtk.Grid()
+        #window.add(grid)
         window.add(grid)
 
         #Close interrupt
@@ -134,11 +135,11 @@ class KIDE(Gtk.Application):
         #Final
         window.show_all()
         window.present()
-	
+
     def auto_dir_update(self, monitor, f1, f2, event_type):
         if event_type in [Gio.FileMonitorEvent.CREATED, Gio.FileMonitorEvent.DELETED, Gio.FileMonitorEvent.RENAMED]:
             self.populate_file_list(self.save_item)
-	
+
     def add_monitor(self):
         gdir = Gio.File.new_for_path(self.working_dir)
         self.monitor = gdir.monitor_directory(Gio.FileMonitorFlags.NONE, None)
@@ -185,8 +186,10 @@ class KIDE(Gtk.Application):
 
     def gen_prefs(self):
         if not os.path.isfile("prefs.json"):
-            with open("prefs.json", "wb") as file:
-                file.write(json.dumps(self.prefs_default, sort_keys=True, indent=4))
+            with open("prefs.json", "w", encoding="utf-8") as file:
+                json.dump(self.prefs_default, file, sort_keys=True, indent=4)
+
+
         with open("prefs.json", "r") as file:
             prefs_content = json.load(file)
         self.word_wrap = prefs_content.get("word_wrap")
@@ -278,14 +281,14 @@ class KIDE(Gtk.Application):
         else:
             try:
                 with open(self.previous_file, "wb") as file:
-                    self.coding_buffer.begin_not_undoable_action()  
+                    self.coding_buffer.begin_not_undoable_action()
                     file.write(coding_text)
                     self.coding_buffer.end_not_undoable_action()
                 self.current_file = model[tree_iter][0]
             except Exception as e:
                 print(e)
         self.previous_file = self.current_file[:]
-        
+
         try:
             filename = model[tree_iter][0]
             with open(filename, "r") as file:
@@ -299,9 +302,9 @@ class KIDE(Gtk.Application):
 
     def gen_new(self, widget, selection):
         self.update_save_buffer(True)
-        self.coding_buffer.begin_not_undoable_action() 
+        self.coding_buffer.begin_not_undoable_action()
         content = self.get_coding_content()[:]
-        self.coding_buffer.end_not_undoable_action() 
+        self.coding_buffer.end_not_undoable_action()
         if not self.save_buffer == content[:]:
             self.save_changes(widget, True, False)
         self.save_buffer = ""
@@ -316,9 +319,9 @@ class KIDE(Gtk.Application):
         else:
             try:
                 with open(self.previous_file, "wb") as file:
-                    self.coding_buffer.begin_not_undoable_action() 
+                    self.coding_buffer.begin_not_undoable_action()
                     file.write(self.get_coding_content()[:])
-                    self.coding_buffer.end_not_undoable_action() 
+                    self.coding_buffer.end_not_undoable_action()
             except Exception as e:
                 print(e)
 
@@ -414,7 +417,7 @@ class KIDE(Gtk.Application):
         scheme_pane = Gtk.Entry()
         spacer_label = Gtk.Label(label="")
         save_prefs_button = Gtk.Button(label="Save prefs")
-        
+
         #Attach items
         prefs_grid.attach(word_wrap_button,0,0,1,1)
         prefs_grid.attach(auto_detect_button,0,1,1,1)
@@ -429,7 +432,7 @@ class KIDE(Gtk.Application):
 
         with open("prefs.json", "r") as file:
             prefs_content = json.load(file)
-        
+
         if prefs_content.get("word_wrap") == "True":
             word_wrap_button.set_active(True)
         if prefs_content.get("auto_detect") == "True":
@@ -437,12 +440,12 @@ class KIDE(Gtk.Application):
         compiler_pane.set_text(prefs_content.get("compiler"))
         lang_pane.set_text(prefs_content.get("lang"))
         scheme_pane.set_text(prefs_content.get("scheme"))
-        
+
         save_prefs_button.connect("clicked", self.change_prefs, word_wrap_button, compiler_pane, lang_pane, scheme_pane, auto_detect_button)
 
         def on_delete(widget, event):
             self.prefs_button.set_sensitive(True)
-        
+
         prefs_window.connect("delete-event", on_delete)
 
         prefs_window.show_all()
@@ -504,7 +507,7 @@ class KIDE(Gtk.Application):
             self.process = Popen(["gnome-terminal", "--", "bash", "-c", "{} .run_file; echo '[KIDE DEBUG]: Press ENTER key to exit...';read".format(self.compiler)], stderr=PIPE, stdout=PIPE, universal_newlines=True)
         except Exception as e:
             print(e)
-		
+
     def run_thread(self, widget):
         try:
             with open(".run_file".format(), "wb") as file:
@@ -516,5 +519,8 @@ class KIDE(Gtk.Application):
         process_thread.start()
 
 app = KIDE()
-exit_status = app.run(sys.argv)
+try:
+    exit_status = app.run(sys.argv)
+except Exception as e:
+    print("Requirements not met. Check your required imports:\nPython3, PyGObject, GtkSourceView3, GtkSourceView3-devel, gtk3, gtk3-devel, python3-gobject, gobject-introspection")
 sys.exit(exit_status)
