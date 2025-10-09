@@ -6,3 +6,6 @@ K_IDE supports loading files, it shows a working directory in the sidebar, it su
 scripts/programs within the IDE
 No attribution is necessary for programs made with K_IDE, but re-distributing/repackaging without any functional changes is explicitly disallowed.
 If for whatever reason you want to make a change to K_IDE, go ahead and fork it 
+
+
+AO v0.3b, the program is nonfunctional, I am investigating fixes considering that the Python2 build was billt on duct tape and dreams on a shoddy system
